@@ -94,6 +94,11 @@ class MainScene extends Phaser.Scene {
 	}
 
 	getWeightedRandomNumber() {
+		// 4% 확률로 폭탄 사과 등장
+		const bombChance = 0.04;
+		if (Math.random() < bombChance) {
+			return 'bomb';
+		}
 		// 숫자별 가중치 설정 (전략적 게임플레이를 위한 확률 조절)
 		const weights = {
 			1: 16,  // 작은 숫자 중 최빈도. 여러 개를 묶어 합 10을 만드는 기초가 됨.
@@ -130,6 +135,34 @@ class MainScene extends Phaser.Scene {
 		const boardStartY = 120;
 		const x = boardStartX + col * this.TILE_SIZE + this.TILE_SIZE / 2;
 		const y = boardStartY + row * this.TILE_SIZE + this.TILE_SIZE / 2;
+
+		if (this.grid[row][col] === 'bomb') {
+			// 폭탄 사과: 검은 원 + 노란 번개
+			const apple = this.add.circle(x, y, 20, 0x222222);
+			apple.setStrokeStyle(3, 0xffff00);
+			apple.setInteractive(new Phaser.Geom.Circle(apple.displayWidth * 0.5, apple.displayHeight * 0.5, apple.radius), Phaser.Geom.Circle.Contains);
+			// 번개 모양(간단히 노란색 선)
+			const graphics = this.add.graphics();
+			graphics.x = x;
+			graphics.y = y;
+			graphics.lineStyle(4, 0xffff00, 1);
+			graphics.beginPath();
+			graphics.moveTo(-6, -8);
+			graphics.lineTo(2, 0);
+			graphics.lineTo(-4, 2);
+			graphics.lineTo(6, 10);
+			graphics.strokePath();
+			apple.bombGraphics = graphics;
+			apple.row = row;
+			apple.col = col;
+			apple.isBomb = true;
+			apple.originalTint = 0x222222;
+			this.appleSprites[row][col] = apple;
+			apple.on('pointerdown', (pointer) => {
+				this.onBombApple(pointer, apple);
+			});
+			return;
+		}
 
 		// Create apple background circle (increased size from 16 to 20)
 		const apple = this.add.circle(x, y, 20, 0xe74c3c);
@@ -303,7 +336,7 @@ class MainScene extends Phaser.Scene {
 
 	startDrag(pointer, apple) {
 		if (this.gameOver) return;
-
+		if (apple.isBomb) return; // 폭탄 사과는 드래그 불가
 		this.isDragging = true;
 		this.dragPath = [apple];
 		this.highlightApple(apple);
@@ -311,7 +344,7 @@ class MainScene extends Phaser.Scene {
 
 	continueOrStartDrag(pointer, apple) {
 		if (this.gameOver) return;
-
+		if (apple.isBomb) return; // 폭탄 사과는 드래그 불가
 		if (!this.isDragging) {
 			if (pointer.isDown) {
 				this.startDrag(pointer, apple);
@@ -559,6 +592,26 @@ class MainScene extends Phaser.Scene {
 						ease: 'Bounce.easeOut'
 					});
 				}
+
+				// applyGravity 내에서 폭탄 사과 이동 시 동기화
+				if (apple.sprite.bombGraphics) {
+					this.tweens.add({
+						targets: [apple.sprite, apple.sprite.bombGraphics],
+						y: newY,
+						duration: 200,
+						ease: 'Bounce.easeOut',
+						onUpdate: () => {
+							apple.sprite.bombGraphics.y = apple.sprite.y;
+						}
+					});
+				} else {
+					this.tweens.add({
+						targets: [apple.sprite, apple.sprite.numberText],
+						y: newY,
+						duration: 200,
+						ease: 'Bounce.easeOut'
+					});
+				}
 			}
 		}
 	}
@@ -576,39 +629,72 @@ class MainScene extends Phaser.Scene {
 					const x = boardStartX + col * this.TILE_SIZE + this.TILE_SIZE / 2;
 					const startY = boardStartY + row * this.TILE_SIZE + this.TILE_SIZE / 2 - 200;
 					const endY = boardStartY + row * this.TILE_SIZE + this.TILE_SIZE / 2;
-
-					const apple = this.add.circle(x, startY, 20, 0xe74c3c);
-					apple.setStrokeStyle(2, 0xc0392b);
-					apple.setInteractive(new Phaser.Geom.Circle(apple.displayWidth * 0.5, apple.displayHeight * 0.5, apple.radius), Phaser.Geom.Circle.Contains);
-
-					const number = this.add.text(x, startY, this.grid[row][col].toString(), {
-						fontSize: '16px',
-						fill: '#ffffff',
-						fontWeight: 'bold'
-					}).setOrigin(0.5);
-
-					apple.row = row;
-					apple.col = col;
-					apple.numberText = number;
-					apple.originalTint = 0xe74c3c;
-
-					this.appleSprites[row][col] = apple;
-
-					apple.on('pointerdown', (pointer) => {
-						this.startDrag(pointer, apple);
-					});
-					apple.on('pointerover', (pointer) => {
-						this.continueOrStartDrag(pointer, apple);
-					});
-
-					// Animate fall
-					this.tweens.add({
-						targets: [apple, number],
-						y: endY,
-						duration: 300,
-						ease: 'Bounce.easeOut',
-						delay: row * 50
-					});
+					if (this.grid[row][col] === 'bomb') {
+						const apple = this.add.circle(x, startY, 20, 0x222222);
+						apple.setStrokeStyle(3, 0xffff00);
+						apple.setInteractive(new Phaser.Geom.Circle(apple.displayWidth * 0.5, apple.displayHeight * 0.5, apple.radius), Phaser.Geom.Circle.Contains);
+						const graphics = this.add.graphics();
+						graphics.x = x;
+						graphics.y = startY;
+						graphics.lineStyle(4, 0xffff00, 1);
+						graphics.beginPath();
+						graphics.moveTo(-6, -8);
+						graphics.lineTo(2, 0);
+						graphics.lineTo(-4, 2);
+						graphics.lineTo(6, 10);
+						graphics.strokePath();
+						apple.bombGraphics = graphics;
+						apple.row = row;
+						apple.col = col;
+						apple.isBomb = true;
+						apple.originalTint = 0x222222;
+						this.appleSprites[row][col] = apple;
+						apple.on('pointerdown', (pointer) => {
+							this.onBombApple(pointer, apple);
+						});
+						this.tweens.add({
+							targets: [apple],
+							y: endY,
+							duration: 300,
+							ease: 'Bounce.easeOut',
+							delay: row * 50,
+							onUpdate: () => {
+								graphics.y = apple.y;
+							}
+						});
+						this.tweens.add({
+							targets: [graphics],
+							y: endY,
+							duration: 300,
+							ease: 'Bounce.easeOut',
+							delay: row * 50
+						});
+					} else {
+						const apple = this.add.circle(x, startY, 20, 0xe74c3c);
+						apple.setStrokeStyle(2, 0xc0392b);
+						apple.setInteractive(new Phaser.Geom.Circle(apple.displayWidth * 0.5, apple.displayHeight * 0.5, apple.radius), Phaser.Geom.Circle.Contains);
+						const number = this.add.text(x, startY, this.grid[row][col].toString(), {
+							fontSize: '16px', fill: '#ffffff', fontWeight: 'bold'
+						}).setOrigin(0.5);
+						apple.row = row;
+						apple.col = col;
+						apple.numberText = number;
+						apple.originalTint = 0xe74c3c;
+						this.appleSprites[row][col] = apple;
+						apple.on('pointerdown', (pointer) => {
+							this.startDrag(pointer, apple);
+						});
+						apple.on('pointerover', (pointer) => {
+							this.continueOrStartDrag(pointer, apple);
+						});
+						this.tweens.add({
+							targets: [apple, number],
+							y: endY,
+							duration: 300,
+							ease: 'Bounce.easeOut',
+							delay: row * 50
+						});
+					}
 				}
 			}
 		}
@@ -648,9 +734,11 @@ class MainScene extends Phaser.Scene {
 		// Destroy all existing apples
 		for (let row = 0; row < this.GRID_HEIGHT; row++) {
 			for (let col = 0; col < this.GRID_WIDTH; col++) {
-				if (this.appleSprites[row][col]) {
-					this.appleSprites[row][col].numberText.destroy();
-					this.appleSprites[row][col].destroy();
+				const apple = this.appleSprites[row][col];
+				if (apple) {
+					if (apple.numberText) apple.numberText.destroy();
+					if (apple.bombGraphics) apple.bombGraphics.destroy();
+					apple.destroy();
 				}
 			}
 		}
@@ -670,6 +758,37 @@ class MainScene extends Phaser.Scene {
 		this.gameOverBox.setVisible(false);
 		this.gameOverText.setVisible(false);
 		this.startTimer();
+	}
+
+	onBombApple(pointer, apple) {
+		if (this.gameOver || this.isDragging) return; // 드래그 중엔 폭탄 불가
+		// 폭탄 사과와 주변 8개 사과 제거
+		const targets = [];
+		for (let dr = -1; dr <= 1; dr++) {
+			for (let dc = -1; dc <= 1; dc++) {
+				const nr = apple.row + dr;
+				const nc = apple.col + dc;
+				if (nr >= 0 && nr < this.GRID_HEIGHT && nc >= 0 && nc < this.GRID_WIDTH) {
+					const targetApple = this.appleSprites[nr][nc];
+					if (targetApple) targets.push(targetApple);
+				}
+			}
+		}
+		targets.forEach(a => {
+			if (a.numberText) a.numberText.destroy();
+			if (a.bombGraphics) a.bombGraphics.destroy();
+			a.destroy();
+			this.grid[a.row][a.col] = null;
+			this.appleSprites[a.row][a.col] = null;
+			this.createParticleEffect(a.x, a.y);
+		});
+		this.playRemoveSound();
+		this.time.delayedCall(100, () => {
+			this.applyGravity();
+			this.time.delayedCall(300, () => {
+				this.refillGrid();
+			});
+		});
 	}
 }
 

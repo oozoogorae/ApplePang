@@ -134,7 +134,7 @@ class MainScene extends Phaser.Scene {
 		// Create apple background circle (increased size from 16 to 20)
 		const apple = this.add.circle(x, y, 20, 0xe74c3c);
 		apple.setStrokeStyle(2, 0xc0392b);
-		apple.setInteractive();
+		apple.setInteractive(new Phaser.Geom.Circle(apple.displayWidth * 0.5, apple.displayHeight * 0.5, apple.radius), Phaser.Geom.Circle.Contains);
 
 		// Create number text (increased font size from 14px to 16px)
 		const number = this.add.text(x, y, this.grid[row][col].toString(), {
@@ -579,7 +579,7 @@ class MainScene extends Phaser.Scene {
 
 					const apple = this.add.circle(x, startY, 20, 0xe74c3c);
 					apple.setStrokeStyle(2, 0xc0392b);
-					apple.setInteractive();
+					apple.setInteractive(new Phaser.Geom.Circle(apple.displayWidth * 0.5, apple.displayHeight * 0.5, apple.radius), Phaser.Geom.Circle.Contains);
 
 					const number = this.add.text(x, startY, this.grid[row][col].toString(), {
 						fontSize: '16px',

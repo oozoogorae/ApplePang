@@ -94,8 +94,8 @@ class MainScene extends Phaser.Scene {
 	}
 
 	getWeightedRandomNumber() {
-		// 4% 확률로 폭탄 사과 등장 (숫자 결정 규칙도 일반 사과와 동일하게 가중치 적용)
-		const bombChance = 0.04;
+		// 5% 확률로 폭탄 사과 등장 (숫자 결정 규칙도 일반 사과와 동일하게 가중치 적용)
+		const bombChance = 0.05;
 		// 숫자별 가중치 설정 (전략적 게임플레이를 위한 확률 조절)
 		const weights = {
 			1: 16,  // 작은 숫자 중 최빈도. 여러 개를 묶어 합 10을 만드는 기초가 됨.

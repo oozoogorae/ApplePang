@@ -423,53 +423,69 @@ class MainScene extends Phaser.Scene {
 		this.score += bonusScore;
 		this.scoreText.setText(`Score: ${this.score}`);
 
-		// 폭탄 사과가 dragPath에 포함되어 있으면, 폭탄 효과 적용
-		const bombApples = this.dragPath.filter(apple => apple.isBomb);
-		let bombAffected = [];
-		bombApples.forEach(bomb => {
-			for (let dr = -1; dr <= 1; dr++) {
-				for (let dc = -1; dc <= 1; dc++) {
-					const nr = bomb.row + dr;
-					const nc = bomb.col + dc;
-					if (nr >= 0 && nr < this.GRID_HEIGHT && nc >= 0 && nc < this.GRID_WIDTH) {
-						const target = this.appleSprites[nr][nc];
-						if (target && !this.dragPath.includes(target) && !bombAffected.includes(target)) {
-							bombAffected.push(target);
+		// 폭탄 연쇄반응 처리 함수
+		const getBombAffected = (apples) => {
+			const affected = [];
+			apples.forEach(bomb => {
+				for (let dr = -1; dr <= 1; dr++) {
+					for (let dc = -1; dc <= 1; dc++) {
+						const nr = bomb.row + dr;
+						const nc = bomb.col + dc;
+						if (nr >= 0 && nr < this.GRID_HEIGHT && nc >= 0 && nc < this.GRID_WIDTH) {
+							const target = this.appleSprites[nr][nc];
+							if (target && !this.dragPath.includes(target) && !affected.includes(target)) {
+								affected.push(target);
+							}
 						}
 					}
 				}
-			}
-		});
+			});
+			return affected;
+		};
 
-		// 폭탄에 의해 추가로 사라지는 사과 점수 가산
-		this.score += bombAffected.length;
-		if (bombAffected.length > 0) {
-			this.scoreText.setText(`Score: ${this.score}`);
-		}
+		// 1차 폭탄 영향
+		let bombAffected = getBombAffected(this.dragPath.filter(apple => apple.isBomb));
+		let totalBombAffected = [...bombAffected];
+		let chainDelay = 250;
 
-		// Remove apples from grid and destroy sprites (드래그로 없앤 사과)
+		// 연쇄반응 처리
+		const processChain = (affectedList, delay) => {
+			if (affectedList.length === 0) return;
+			this.time.delayedCall(delay, () => {
+				this.playBombSound();
+				const nextBombs = [];
+				affectedList.forEach(apple => {
+					this.createParticleEffect(apple.x, apple.y);
+					this.grid[apple.row][apple.col] = null;
+					apple.numberText.destroy();
+					apple.destroy();
+					this.appleSprites[apple.row][apple.col] = null;
+					if (apple.isBomb) nextBombs.push(apple);
+				});
+				// 점수 가산
+				this.score += affectedList.length;
+				this.scoreText.setText(`Score: ${this.score}`);
+				// 다음 연쇄
+				const nextAffected = getBombAffected(nextBombs).filter(a => !totalBombAffected.includes(a));
+				nextAffected.forEach(a => totalBombAffected.push(a));
+				processChain(nextAffected, chainDelay);
+			});
+		};
+
+		// 드래그로 없앤 사과 제거
 		this.dragPath.forEach(apple => {
 			this.grid[apple.row][apple.col] = null;
 			apple.numberText.destroy();
 			apple.destroy();
 			this.appleSprites[apple.row][apple.col] = null;
 		});
-		// Remove bombAffected apples (폭탄에 의해 터지는 사과는 약간 딜레이)
-		if (bombAffected.length > 0) {
-			this.time.delayedCall(250, () => {
-				this.playBombSound(); // 폭탄 효과음 추가 (새로운 사운드)
-				bombAffected.forEach(apple => {
-					this.createParticleEffect(apple.x, apple.y);
-					this.grid[apple.row][apple.col] = null;
-					apple.numberText.destroy();
-					apple.destroy();
-					this.appleSprites[apple.row][apple.col] = null;
-				});
-			});
-		}
 
-		// Apply gravity and refill
-		this.time.delayedCall(100 + (bombAffected.length > 0 ? 250 : 0), () => {
+		// 연쇄반응 시작
+		processChain(bombAffected, chainDelay);
+
+		// Apply gravity and refill (연쇄반응이 모두 끝난 뒤 실행)
+		const totalDelay = 100 + (bombAffected.length > 0 ? chainDelay * (1 + Math.ceil(totalBombAffected.length / 8)) : 0);
+		this.time.delayedCall(totalDelay, () => {
 			this.applyGravity();
 			this.time.delayedCall(300, () => {
 				this.refillGrid();
